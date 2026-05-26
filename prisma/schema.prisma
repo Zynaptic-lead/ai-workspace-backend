@@ -1,0 +1,298 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== SCHOOL ====================
+model School {
+  id        String   @id @default(uuid())
+  name      String
+  address   String?
+  phone     String?
+  email     String?
+  logo      String?
+  type      SchoolType @default(UNIVERSITY)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users       User[]
+  courses     Course[]
+  departments Department[]
+  sessions    AcademicSession[]
+  levels      Level[]
+}
+
+// ==================== ACADEMIC SESSION ====================
+model AcademicSession {
+  id        String   @id @default(uuid())
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean  @default(true)
+  schoolId  String
+
+  school    School    @relation(fields: [schoolId], references: [id])
+  levels    Level[]
+  courses   Course[]
+  enrollments Enrollment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==================== DEPARTMENT ====================
+model Department {
+  id        String   @id @default(uuid())
+  name      String
+  code      String?
+  schoolId  String
+  headId    String?  @unique
+
+  school    School   @relation(fields: [schoolId], references: [id])
+  head      User?    @relation("DepartmentHead", fields: [headId], references: [id])
+  users     User[]   @relation("DepartmentMembers")
+  courses   Course[]
+  levels    Level[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==================== LEVEL ====================
+model Level {
+  id           String   @id @default(uuid())
+  name         String
+  code         String?
+  sortOrder    Int      @default(0)
+  schoolId     String
+  sessionId    String?
+  departmentId String?
+
+  school       School          @relation(fields: [schoolId], references: [id])
+  session      AcademicSession? @relation(fields: [sessionId], references: [id])
+  department   Department?     @relation(fields: [departmentId], references: [id])
+
+  users        User[]
+  courses      Course[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ==================== USER ====================
+model User {
+  id            String   @id @default(uuid())
+  fullName      String
+  email         String   @unique
+  password      String
+  role          Role
+  avatar        String?
+  isActive      Boolean  @default(true)
+  accountStatus AccountStatus @default(PENDING)
+
+  schoolId      String
+  school        School   @relation(fields: [schoolId], references: [id])
+
+  departmentId  String?
+  department    Department? @relation("DepartmentMembers", fields: [departmentId], references: [id])
+
+  levelId       String?
+  level         Level?   @relation(fields: [levelId], references: [id])
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  headOfDepartment Department?         @relation("DepartmentHead")
+  teacherCourses      Course[]         @relation("TeacherCourses")
+  enrolledCourses     Enrollment[]
+  submittedAssignments Submission[]
+  createdAssignments   Assignment[]     @relation("TeacherAssignments")
+  createdMaterials     Material[]
+  notifications        Notification[]
+  refreshTokens        RefreshToken[]
+}
+
+// ==================== COURSE ====================
+model Course {
+  id            String   @id @default(uuid())
+  title         String
+  code          String?
+  description   String?
+  coverImage    String?
+  units         Int      @default(2)
+
+  schoolId      String
+  school        School   @relation(fields: [schoolId], references: [id])
+
+  departmentId  String?
+  department    Department? @relation(fields: [departmentId], references: [id])
+
+  levelId       String?
+  level         Level?   @relation(fields: [levelId], references: [id])
+
+  sessionId     String?
+  session       AcademicSession? @relation(fields: [sessionId], references: [id])
+
+  teacherId     String?
+  teacher       User?     @relation("TeacherCourses", fields: [teacherId], references: [id])
+
+  enrollments   Enrollment[]
+  assignments   Assignment[]
+  materials     Material[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ==================== ENROLLMENT ====================
+model Enrollment {
+  id        String   @id @default(uuid())
+  studentId String
+  student   User     @relation(fields: [studentId], references: [id])
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id])
+
+  sessionId String?
+  session   AcademicSession? @relation(fields: [sessionId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([studentId, courseId])
+}
+
+// ==================== ASSIGNMENT ====================
+model Assignment {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  dueDate     DateTime?
+  totalPoints Float    @default(100)
+  fileUrl     String?
+
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id])
+
+  teacherId   String
+  teacher     User     @relation("TeacherAssignments", fields: [teacherId], references: [id])
+
+  schoolId    String
+
+  submissions Submission[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ==================== SUBMISSION ====================
+model Submission {
+  id           String   @id @default(uuid())
+  content      String?
+  fileUrl      String?
+  score        Float?
+  feedback     String?
+  status       SubmissionStatus @default(PENDING)
+
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id])
+
+  studentId    String
+  student      User       @relation(fields: [studentId], references: [id])
+
+  schoolId     String
+
+  submittedAt  DateTime @default(now())
+  gradedAt     DateTime?
+}
+
+// ==================== MATERIAL ====================
+model Material {
+  id           String   @id @default(uuid())
+  title        String
+  description  String?
+  fileUrl      String?
+  type         MaterialType @default(DOCUMENT)
+
+  courseId     String
+  course       Course   @relation(fields: [courseId], references: [id])
+
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+
+  schoolId     String
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ==================== NOTIFICATION ====================
+model Notification {
+  id        String   @id @default(uuid())
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  type      NotificationType
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+
+  schoolId  String
+
+  createdAt DateTime @default(now())
+}
+
+// ==================== REFRESH TOKEN ====================
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// ==================== ENUMS ====================
+enum Role {
+  SUPER_ADMIN
+  SCHOOL_ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum SchoolType {
+  UNIVERSITY
+  POLYTECHNIC
+}
+
+enum AccountStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  SUSPENDED
+}
+
+enum SubmissionStatus {
+  PENDING
+  SUBMITTED
+  GRADED
+  RETURNED
+}
+
+enum MaterialType {
+  DOCUMENT
+  VIDEO
+  LINK
+  NOTE
+}
+
+enum NotificationType {
+  ASSIGNMENT
+  SUBMISSION
+  ANNOUNCEMENT
+  GRADE
+  APPROVAL
+}
