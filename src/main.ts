@@ -7,6 +7,12 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // CORS
+  app.enableCors({
+    origin: true,
+    credentials: true,
+  });
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -15,7 +21,7 @@ async function bootstrap() {
     }),
   );
 
-  // Swagger Setup
+  // Swagger
   const config = new DocumentBuilder()
     .setTitle('AI Workspace API')
     .setDescription('Multi-school learning platform with AI tools')
