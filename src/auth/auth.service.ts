@@ -59,7 +59,10 @@ export class AuthService {
 
     const result = await this.prisma.$transaction(async (tx) => {
       const school = await tx.school.create({
-        data: { name: dto.schoolName },
+        data: {
+          name: dto.schoolName,
+          isActive: false,
+        },
       });
 
       const user = await tx.user.create({
@@ -69,26 +72,20 @@ export class AuthService {
           password: hashedPassword,
           role: Role.SCHOOL_ADMIN,
           schoolId: school.id,
-          accountStatus: 'ACTIVE',
+          accountStatus: 'PENDING',
         },
       });
 
       return { school, user };
     });
 
-    const accessToken = this.jwtService.sign({
-      sub: result.user.id,
-      email: result.user.email,
-      role: result.user.role,
-      schoolId: result.user.schoolId,
-    });
-
     return {
-      message: 'School registered successfully',
-      access_token: accessToken,
+      message:
+        'School registration submitted successfully. Waiting for super admin approval.',
       school: {
         id: result.school.id,
         name: result.school.name,
+        isActive: result.school.isActive,
       },
       user: {
         id: result.user.id,
@@ -110,15 +107,14 @@ export class AuthService {
       throw new ConflictException('Email already exists');
     }
 
-    const school = await this.prisma.school.findUnique({
-      where: { id: dto.schoolId },
+    const school = await this.prisma.school.findFirst({
+      where: { id: dto.schoolId, isActive: true },
     });
 
     if (!school) {
-      throw new NotFoundException('School not found');
+      throw new NotFoundException('School not found or not yet approved');
     }
 
-    // Validate department and level
     await this.validateDepartmentAndLevel(
       dto.departmentId,
       dto.levelId,
@@ -152,7 +148,8 @@ export class AuthService {
     });
 
     return {
-      message: 'Registration submitted successfully. Waiting for school admin approval.',
+      message:
+        'Registration submitted successfully. Waiting for school admin approval.',
       user,
     };
   }
@@ -167,15 +164,14 @@ export class AuthService {
       throw new ConflictException('Email already exists');
     }
 
-    const school = await this.prisma.school.findUnique({
-      where: { id: dto.schoolId },
+    const school = await this.prisma.school.findFirst({
+      where: { id: dto.schoolId, isActive: true },
     });
 
     if (!school) {
-      throw new NotFoundException('School not found');
+      throw new NotFoundException('School not found or not yet approved');
     }
 
-    // Validate department and level
     await this.validateDepartmentAndLevel(
       dto.departmentId,
       dto.levelId,
@@ -209,7 +205,8 @@ export class AuthService {
     });
 
     return {
-      message: 'Registration submitted successfully. Waiting for school admin approval.',
+      message:
+        'Registration submitted successfully. Waiting for school admin approval.',
       user,
     };
   }
@@ -233,6 +230,13 @@ export class AuthService {
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid email or password');
+    }
+
+    // Check if school is active
+    if (!user.school.isActive && user.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException(
+        'Your school has not been approved yet. Please wait for super admin approval.',
+      );
     }
 
     if (user.accountStatus === 'PENDING') {
@@ -271,6 +275,7 @@ export class AuthService {
         school: {
           id: user.school.id,
           name: user.school.name,
+          isActive: user.school.isActive,
         },
       },
     };

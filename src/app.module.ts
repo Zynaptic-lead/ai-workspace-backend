@@ -14,6 +14,7 @@ import { SessionsModule } from './sessions/sessions.module';
 import { DepartmentsModule } from './departments/departments.module';
 import { LevelsModule } from './levels/levels.module';
 import { CommonModule } from './common/common.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { CommonModule } from './common/common.module';
     MaterialsModule,
     NotificationsModule,
     AiModule,
+    AdminModule,
   ],
 })
 export class AppModule {}
