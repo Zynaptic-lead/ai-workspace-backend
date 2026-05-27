@@ -7,25 +7,25 @@ export class RegisterUserDto {
   @IsNotEmpty()
   fullName!: string;
 
-  @ApiProperty({ example: 'bob@test.com', description: 'Email address' })
+  @ApiProperty({ example: 'bob@test.com', description: 'Email' })
   @IsEmail()
   email!: string;
 
-  @ApiProperty({ example: '123456', description: 'Password (min 6 characters)' })
+  @ApiProperty({ example: '123456', description: 'Password (min 6 chars)' })
   @IsString()
   @MinLength(6)
   password!: string;
 
-  @ApiProperty({ example: '32ca8ebc-a254-446d-a7cb-bd6488fe4c6e', description: 'School ID from GET /schools' })
+  @ApiProperty({ example: 'uuid', description: 'School ID' })
   @IsUUID()
   schoolId!: string;
 
-  @ApiPropertyOptional({ example: 'department-uuid', description: 'Department ID from GET /departments/public' })
+  @ApiPropertyOptional({ example: 'uuid', description: 'Department ID' })
   @IsUUID()
   @IsOptional()
   departmentId?: string;
 
-  @ApiPropertyOptional({ example: 'level-uuid', description: 'Level ID from GET /levels/public' })
+  @ApiPropertyOptional({ example: 'uuid', description: 'Level ID' })
   @IsUUID()
   @IsOptional()
   levelId?: string;

@@ -12,7 +12,7 @@ export class CreateLevelDto {
   @IsOptional()
   code?: string;
 
-  @ApiProperty({ example: 1, description: 'Sort order' })
+  @ApiProperty({ example: 1, description: 'Sort order (1, 2, 3...)' })
   @IsInt()
   sortOrder!: number;
 
