@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsString, IsUUID, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, IsUUID, MinLength, IsOptional } from 'class-validator';
 
 export class RegisterUserDto {
   @IsString()
@@ -14,4 +14,12 @@ export class RegisterUserDto {
 
   @IsUUID()
   schoolId!: string;
+
+  @IsUUID()
+  @IsOptional()
+  departmentId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  levelId?: string;
 }

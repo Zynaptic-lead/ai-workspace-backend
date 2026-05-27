@@ -20,6 +20,31 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
+  // ==================== VALIDATE DEPARTMENT & LEVEL ====================
+  private async validateDepartmentAndLevel(
+    departmentId: string | undefined,
+    levelId: string | undefined,
+    schoolId: string,
+  ) {
+    if (departmentId) {
+      const department = await this.prisma.department.findFirst({
+        where: { id: departmentId, schoolId },
+      });
+      if (!department) {
+        throw new NotFoundException('Department not found in this school');
+      }
+    }
+
+    if (levelId) {
+      const level = await this.prisma.level.findFirst({
+        where: { id: levelId, schoolId },
+      });
+      if (!level) {
+        throw new NotFoundException('Level not found in this school');
+      }
+    }
+  }
+
   // ==================== SCHOOL ADMIN REGISTRATION ====================
   async register(dto: RegisterDto) {
     const existingUser = await this.prisma.user.findUnique({
@@ -93,6 +118,13 @@ export class AuthService {
       throw new NotFoundException('School not found');
     }
 
+    // Validate department and level
+    await this.validateDepartmentAndLevel(
+      dto.departmentId,
+      dto.levelId,
+      dto.schoolId,
+    );
+
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
     const user = await this.prisma.user.create({
@@ -102,6 +134,8 @@ export class AuthService {
         password: hashedPassword,
         role: Role.STUDENT,
         schoolId: dto.schoolId,
+        departmentId: dto.departmentId,
+        levelId: dto.levelId,
         accountStatus: 'PENDING',
       },
       select: {
@@ -110,6 +144,8 @@ export class AuthService {
         email: true,
         role: true,
         schoolId: true,
+        departmentId: true,
+        levelId: true,
         accountStatus: true,
         createdAt: true,
       },
@@ -139,6 +175,13 @@ export class AuthService {
       throw new NotFoundException('School not found');
     }
 
+    // Validate department and level
+    await this.validateDepartmentAndLevel(
+      dto.departmentId,
+      dto.levelId,
+      dto.schoolId,
+    );
+
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
     const user = await this.prisma.user.create({
@@ -148,6 +191,8 @@ export class AuthService {
         password: hashedPassword,
         role: Role.TEACHER,
         schoolId: dto.schoolId,
+        departmentId: dto.departmentId,
+        levelId: dto.levelId,
         accountStatus: 'PENDING',
       },
       select: {
@@ -156,6 +201,8 @@ export class AuthService {
         email: true,
         role: true,
         schoolId: true,
+        departmentId: true,
+        levelId: true,
         accountStatus: true,
         createdAt: true,
       },
@@ -171,7 +218,11 @@ export class AuthService {
   async login(dto: LoginDto) {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
-      include: { school: true },
+      include: {
+        school: true,
+        department: { select: { id: true, name: true } },
+        level: { select: { id: true, name: true } },
+      },
     });
 
     if (!user) {
@@ -212,7 +263,11 @@ export class AuthService {
         email: user.email,
         role: user.role,
         schoolId: user.schoolId,
+        departmentId: user.departmentId,
+        levelId: user.levelId,
         accountStatus: user.accountStatus,
+        department: user.department,
+        level: user.level,
         school: {
           id: user.school.id,
           name: user.school.name,
