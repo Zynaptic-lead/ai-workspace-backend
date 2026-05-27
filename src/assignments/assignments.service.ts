@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 import { SubmitAssignmentDto } from './dto/submit-assignment.dto';
@@ -7,7 +8,10 @@ import { GradeSubmissionDto } from './dto/grade-submission.dto';
 
 @Injectable()
 export class AssignmentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   // ==================== CREATE ASSIGNMENT ====================
   async create(dto: CreateAssignmentDto, teacherId: string, schoolId: string) {
@@ -33,6 +37,15 @@ export class AssignmentsService {
         course: { select: { id: true, title: true, code: true } },
       },
     });
+
+    // Notify all enrolled students
+    await this.notificationsService.sendToCourseStudents(
+      'New Assignment',
+      `"${dto.title}" has been posted for ${course.title}. Due: ${dto.dueDate ? new Date(dto.dueDate).toLocaleDateString() : 'No deadline'}`,
+      'ASSIGNMENT',
+      dto.courseId,
+      schoolId,
+    );
 
     return { message: 'Assignment created successfully', assignment };
   }
@@ -135,7 +148,6 @@ export class AssignmentsService {
       throw new NotFoundException('Assignment not found');
     }
 
-    // Check enrollment
     const enrollment = await this.prisma.enrollment.findUnique({
       where: {
         studentId_courseId: {
@@ -151,18 +163,18 @@ export class AssignmentsService {
       );
     }
 
-    // Check due date
     if (assignment.dueDate && new Date() > assignment.dueDate) {
       throw new ForbiddenException('Assignment due date has passed');
     }
 
-    // Check if already submitted
     const existing = await this.prisma.submission.findFirst({
       where: { assignmentId, studentId },
     });
 
+    let submission;
+
     if (existing) {
-      const submission = await this.prisma.submission.update({
+      submission = await this.prisma.submission.update({
         where: { id: existing.id },
         data: {
           content: dto.content,
@@ -170,22 +182,39 @@ export class AssignmentsService {
           status: 'SUBMITTED',
         },
       });
-
-      return { message: 'Submission updated successfully', submission };
+    } else {
+      submission = await this.prisma.submission.create({
+        data: {
+          content: dto.content,
+          fileUrl: dto.fileUrl,
+          status: 'SUBMITTED',
+          assignmentId,
+          studentId,
+          schoolId,
+        },
+      });
     }
 
-    const submission = await this.prisma.submission.create({
-      data: {
-        content: dto.content,
-        fileUrl: dto.fileUrl,
-        status: 'SUBMITTED',
-        assignmentId,
-        studentId,
-        schoolId,
-      },
-    });
+    // Notify teacher
+    if (assignment.teacherId) {
+      const student = await this.prisma.user.findUnique({
+        where: { id: studentId },
+        select: { fullName: true },
+      });
 
-    return { message: 'Assignment submitted successfully', submission };
+      await this.notificationsService.create(
+        'New Submission',
+        `${student?.fullName || 'A student'} submitted "${assignment.title}"`,
+        'SUBMISSION',
+        schoolId,
+        assignment.teacherId,
+      );
+    }
+
+    return {
+      message: existing ? 'Submission updated successfully' : 'Assignment submitted successfully',
+      submission,
+    };
   }
 
   // ==================== GRADE SUBMISSION ====================
@@ -196,6 +225,9 @@ export class AssignmentsService {
   ) {
     const submission = await this.prisma.submission.findFirst({
       where: { id: submissionId, schoolId },
+      include: {
+        assignment: { select: { id: true, title: true, totalPoints: true } },
+      },
     });
 
     if (!submission) {
@@ -216,10 +248,19 @@ export class AssignmentsService {
       },
     });
 
+    // Notify student
+    await this.notificationsService.create(
+      'Assignment Graded',
+      `"${submission.assignment?.title || 'Your assignment'}" has been graded. Score: ${dto.score}/${submission.assignment?.totalPoints || 100}`,
+      'GRADE',
+      schoolId,
+      submission.studentId,
+    );
+
     return { message: 'Submission graded successfully', submission: updated };
   }
 
-  // ==================== GET MY SUBMISSIONS (STUDENT) ====================
+  // ==================== GET MY SUBMISSIONS ====================
   async getMySubmissions(studentId: string, schoolId: string) {
     const submissions = await this.prisma.submission.findMany({
       where: { studentId, schoolId },
@@ -234,7 +275,7 @@ export class AssignmentsService {
     return { submissions };
   }
 
-  // ==================== GET SUBMISSIONS FOR ASSIGNMENT (TEACHER) ====================
+  // ==================== GET SUBMISSIONS FOR ASSIGNMENT ====================
   async getSubmissionsForAssignment(assignmentId: string, schoolId: string) {
     const submissions = await this.prisma.submission.findMany({
       where: { assignmentId, schoolId },

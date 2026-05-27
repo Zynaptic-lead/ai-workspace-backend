@@ -5,13 +5,17 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   // ==================== CREATE USER ====================
   async create(dto: CreateUserDto, schoolId: string) {
@@ -125,32 +129,21 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    // Only SCHOOL_ADMIN can approve teachers
     if (user.role === 'TEACHER' && approverRole !== 'SCHOOL_ADMIN') {
-      throw new ForbiddenException(
-        'Only school admin can approve teachers',
-      );
+      throw new ForbiddenException('Only school admin can approve teachers');
     }
 
-    // Department heads (TEACHER role) can only approve students in their department
     if (approverRole === 'TEACHER') {
       const isDeptHead = await this.prisma.department.findFirst({
-        where: {
-          headId: approverId,
-          schoolId,
-        },
+        where: { headId: approverId, schoolId },
       });
 
       if (!isDeptHead) {
-        throw new ForbiddenException(
-          'Only department heads can approve students',
-        );
+        throw new ForbiddenException('Only department heads can approve students');
       }
 
       if (user.departmentId !== isDeptHead.id) {
-        throw new ForbiddenException(
-          'You can only approve students in your department',
-        );
+        throw new ForbiddenException('You can only approve students in your department');
       }
     }
 
@@ -166,6 +159,15 @@ export class UsersService {
         accountStatus: true,
       },
     });
+
+    // Notify user
+    await this.notificationsService.create(
+      'Account Approved',
+      'Your account has been approved. You can now login and access your dashboard.',
+      'APPROVAL',
+      schoolId,
+      id,
+    );
 
     return { message: 'User approved successfully', user: updated };
   }
@@ -185,32 +187,21 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    // Only SCHOOL_ADMIN can reject teachers
     if (user.role === 'TEACHER' && approverRole !== 'SCHOOL_ADMIN') {
-      throw new ForbiddenException(
-        'Only school admin can reject teachers',
-      );
+      throw new ForbiddenException('Only school admin can reject teachers');
     }
 
-    // Department heads can only reject students in their department
     if (approverRole === 'TEACHER') {
       const isDeptHead = await this.prisma.department.findFirst({
-        where: {
-          headId: approverId,
-          schoolId,
-        },
+        where: { headId: approverId, schoolId },
       });
 
       if (!isDeptHead) {
-        throw new ForbiddenException(
-          'Only department heads can reject students',
-        );
+        throw new ForbiddenException('Only department heads can reject students');
       }
 
       if (user.departmentId !== isDeptHead.id) {
-        throw new ForbiddenException(
-          'You can only reject students in your department',
-        );
+        throw new ForbiddenException('You can only reject students in your department');
       }
     }
 
@@ -226,6 +217,15 @@ export class UsersService {
         accountStatus: true,
       },
     });
+
+    // Notify user
+    await this.notificationsService.create(
+      'Account Rejected',
+      'Your account has been rejected. Please contact the school admin for more information.',
+      'APPROVAL',
+      schoolId,
+      id,
+    );
 
     return { message: 'User rejected', user: updated };
   }
@@ -263,11 +263,7 @@ export class UsersService {
   // ==================== DELETE USER ====================
   async remove(id: string, schoolId: string) {
     await this.findOne(id, schoolId);
-
-    await this.prisma.user.delete({
-      where: { id },
-    });
-
+    await this.prisma.user.delete({ where: { id } });
     return { message: 'User deleted successfully' };
   }
 }
