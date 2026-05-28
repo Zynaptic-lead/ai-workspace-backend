@@ -29,7 +29,6 @@ export class AdminService {
       throw new NotFoundException('School not found');
     }
 
-    // Activate school and approve the admin
     await this.prisma.$transaction(async (tx) => {
       await tx.school.update({
         where: { id: schoolId },
@@ -73,5 +72,40 @@ export class AdminService {
     });
 
     return { message: 'School rejected and removed' };
+  }
+
+  async deleteSchool(schoolId: string) {
+    const school = await this.prisma.school.findUnique({
+      where: { id: schoolId },
+    });
+
+    if (!school) {
+      throw new NotFoundException('School not found');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // Delete all related data in order (respecting foreign keys)
+      await tx.notification.deleteMany({ where: { schoolId } });
+      await tx.submission.deleteMany({ where: { schoolId } });
+      await tx.assignment.deleteMany({ where: { schoolId } });
+      await tx.material.deleteMany({ where: { schoolId } });
+
+      // Delete enrollments for courses in this school
+      const courses = await tx.course.findMany({ where: { schoolId }, select: { id: true } });
+      const courseIds = courses.map((c) => c.id);
+      if (courseIds.length > 0) {
+        await tx.enrollment.deleteMany({ where: { courseId: { in: courseIds } } });
+      }
+
+      await tx.course.deleteMany({ where: { schoolId } });
+      await tx.level.deleteMany({ where: { schoolId } });
+      await tx.department.deleteMany({ where: { schoolId } });
+      await tx.academicSession.deleteMany({ where: { schoolId } });
+      await tx.refreshToken.deleteMany({ where: { user: { schoolId } } });
+      await tx.user.deleteMany({ where: { schoolId } });
+      await tx.school.delete({ where: { id: schoolId } });
+    });
+
+    return { message: 'School and all associated data deleted successfully' };
   }
 }

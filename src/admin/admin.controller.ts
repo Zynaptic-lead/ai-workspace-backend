@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Delete, Param, UseGuards } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -26,5 +26,11 @@ export class AdminController {
   @Roles(Role.SUPER_ADMIN)
   rejectSchool(@Param('id') id: string) {
     return this.adminService.rejectSchool(id);
+  }
+
+  @Delete('schools/:id')
+  @Roles(Role.SUPER_ADMIN)
+  deleteSchool(@Param('id') id: string) {
+    return this.adminService.deleteSchool(id);
   }
 }
