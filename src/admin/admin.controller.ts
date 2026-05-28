@@ -10,6 +10,12 @@ import { Role } from '@prisma/client';
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
+  @Get('schools')
+  @Roles(Role.SUPER_ADMIN)
+  getAllSchools() {
+    return this.adminService.getAllSchools();
+  }
+
   @Get('schools/pending')
   @Roles(Role.SUPER_ADMIN)
   getPendingSchools() {

@@ -5,6 +5,21 @@ import { PrismaService } from '../prisma/prisma.service';
 export class AdminService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async getAllSchools() {
+    const schools = await this.prisma.school.findMany({
+      where: { isActive: true },
+      include: {
+        users: {
+          where: { role: 'SCHOOL_ADMIN' },
+          select: { id: true, fullName: true, email: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return { schools };
+  }
+
   async getPendingSchools() {
     const schools = await this.prisma.school.findMany({
       where: { isActive: false },
@@ -59,16 +74,11 @@ export class AdminService {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.user.updateMany({
-        where: {
-          schoolId,
-          role: 'SCHOOL_ADMIN',
-        },
+        where: { schoolId, role: 'SCHOOL_ADMIN' },
         data: { accountStatus: 'REJECTED' },
       });
 
-      await tx.school.delete({
-        where: { id: schoolId },
-      });
+      await tx.school.delete({ where: { id: schoolId } });
     });
 
     return { message: 'School rejected and removed' };
@@ -84,13 +94,11 @@ export class AdminService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      // Delete all related data in order (respecting foreign keys)
       await tx.notification.deleteMany({ where: { schoolId } });
       await tx.submission.deleteMany({ where: { schoolId } });
       await tx.assignment.deleteMany({ where: { schoolId } });
       await tx.material.deleteMany({ where: { schoolId } });
 
-      // Delete enrollments for courses in this school
       const courses = await tx.course.findMany({ where: { schoolId }, select: { id: true } });
       const courseIds = courses.map((c) => c.id);
       if (courseIds.length > 0) {
