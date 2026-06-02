@@ -129,10 +129,38 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
+    // SCHOOL_ADMIN can approve anyone — bypass all checks
+    if (approverRole === 'SCHOOL_ADMIN') {
+      const updated = await this.prisma.user.update({
+        where: { id },
+        data: { accountStatus: 'ACTIVE' },
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          role: true,
+          schoolId: true,
+          accountStatus: true,
+        },
+      });
+
+      await this.notificationsService.create(
+        'Account Approved',
+        'Your account has been approved. You can now login and access your dashboard.',
+        'APPROVAL',
+        schoolId,
+        id,
+      );
+
+      return { message: 'User approved successfully', user: updated };
+    }
+
+    // Only SCHOOL_ADMIN can approve teachers
     if (user.role === 'TEACHER' && approverRole !== 'SCHOOL_ADMIN') {
       throw new ForbiddenException('Only school admin can approve teachers');
     }
 
+    // Department heads (TEACHER role) can only approve students in their department
     if (approverRole === 'TEACHER') {
       const isDeptHead = await this.prisma.department.findFirst({
         where: { headId: approverId, schoolId },
@@ -142,7 +170,7 @@ export class UsersService {
         throw new ForbiddenException('Only department heads can approve students');
       }
 
-      if (user.departmentId !== isDeptHead.id) {
+      if (user.departmentId && user.departmentId !== isDeptHead.id) {
         throw new ForbiddenException('You can only approve students in your department');
       }
     }
@@ -160,7 +188,6 @@ export class UsersService {
       },
     });
 
-    // Notify user
     await this.notificationsService.create(
       'Account Approved',
       'Your account has been approved. You can now login and access your dashboard.',
@@ -187,10 +214,38 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
+    // SCHOOL_ADMIN can reject anyone — bypass all checks
+    if (approverRole === 'SCHOOL_ADMIN') {
+      const updated = await this.prisma.user.update({
+        where: { id },
+        data: { accountStatus: 'REJECTED' },
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          role: true,
+          schoolId: true,
+          accountStatus: true,
+        },
+      });
+
+      await this.notificationsService.create(
+        'Account Rejected',
+        'Your account has been rejected. Please contact the school admin for more information.',
+        'APPROVAL',
+        schoolId,
+        id,
+      );
+
+      return { message: 'User rejected', user: updated };
+    }
+
+    // Only SCHOOL_ADMIN can reject teachers
     if (user.role === 'TEACHER' && approverRole !== 'SCHOOL_ADMIN') {
       throw new ForbiddenException('Only school admin can reject teachers');
     }
 
+    // Department heads can only reject students in their department
     if (approverRole === 'TEACHER') {
       const isDeptHead = await this.prisma.department.findFirst({
         where: { headId: approverId, schoolId },
@@ -200,7 +255,7 @@ export class UsersService {
         throw new ForbiddenException('Only department heads can reject students');
       }
 
-      if (user.departmentId !== isDeptHead.id) {
+      if (user.departmentId && user.departmentId !== isDeptHead.id) {
         throw new ForbiddenException('You can only reject students in your department');
       }
     }
@@ -218,7 +273,6 @@ export class UsersService {
       },
     });
 
-    // Notify user
     await this.notificationsService.create(
       'Account Rejected',
       'Your account has been rejected. Please contact the school admin for more information.',
